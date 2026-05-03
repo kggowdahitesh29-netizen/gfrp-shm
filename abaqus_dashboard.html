@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GFRP Structural Health Monitoring — Abaqus Analysis</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --bg2: #111318;
+    --bg3: #181c22;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --text2: #8b8fa8;
+    --text3: #555a70;
+    --blue: #4a9eff;
+    --green: #2ecc8e;
+    --orange: #ff7c4a;
+    --pink: #e05b8c;
+    --purple: #9b7cff;
+    --amber: #f5a623;
+    --teal: #1ab8a4;
+    --ok: #2ecc8e;
+    --warn: #f5a623;
+    --danger: #ff4a4a;
+    --ok-bg: rgba(46,204,142,0.08);
+    --warn-bg: rgba(245,166,35,0.08);
+    --danger-bg: rgba(255,74,74,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 0.5px solid var(--border2);
+  }
+  .header-left h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .header-left p {
+    font-size: 13px;
+    color: var(--text2);
+    font-family: 'DM Mono', monospace;
+  }
+  .badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(74,158,255,0.12);
+    color: var(--blue);
+    border: 0.5px solid rgba(74,158,255,0.25);
+    letter-spacing: 0.5px;
+  }
+
+  .bc-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .bc-tab {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 0.5px solid var(--border2);
+    background: var(--bg2);
+    color: var(--text2);
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+  .bc-tab:hover { border-color: var(--blue); color: var(--text); }
+  .bc-tab.active {
+    background: rgba(74,158,255,0.12);
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .metric-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .metric-label {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+  .metric-value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .metric-unit {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .alerts-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .alert-box {
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    border: 0.5px solid;
+  }
+  .alert-box .a-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .alert-box .a-range { font-size: 13px; font-weight: 500; }
+  .alert-box .a-desc { font-size: 11px; margin-top: 3px; opacity: 0.7; }
+  .a-ok { background: var(--ok-bg); border-color: rgba(46,204,142,0.25); color: var(--ok); }
+  .a-warn { background: var(--warn-bg); border-color: rgba(245,166,35,0.25); color: var(--warn); }
+  .a-danger { background: var(--danger-bg); border-color: rgba(255,74,74,0.25); color: var(--danger); }
+
+  .charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .chart-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .chart-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: var(--text2);
+    font-family: 'DM Mono', monospace;
+  }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .leg-box { width: 10px; height: 3px; border-radius: 2px; }
+
+  .chart-full {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+
+  .ratio-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .ratio-info {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text2);
+    padding: 10px 14px;
+    background: var(--bg3);
+    border-radius: 6px;
+    border: 0.5px solid var(--border);
+    margin-top: 10px;
+    line-height: 1.8;
+  }
+
+  .footer {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 0.5px solid var(--border);
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>GFRP Plate — Frequency Analysis Dashboard</h1>
+    <p>Abaqus FEA · 7 boundary conditions · Hole size 10–90mm · Fibre angles 0°, 30°, 45°, 0/45°</p>
+  </div>
+  <span class="badge">ABAQUS FEA DATA</span>
+</div>
+
+<div class="bc-tabs" id="bcTabs"></div>
+
+<div class="metrics-grid">
+  <div class="metric-card">
+    <div class="metric-label">M1 Baseline</div>
+    <div class="metric-value" id="m1base">—</div>
+    <div class="metric-unit">Hz · 10mm hole · 0°</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">M2 Baseline</div>
+    <div class="metric-value" id="m2base">—</div>
+    <div class="metric-unit">Hz</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">M3 Baseline</div>
+    <div class="metric-value" id="m3base">—</div>
+    <div class="metric-unit">Hz</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">M2/M1 Ratio</div>
+    <div class="metric-value" id="ratio">—</div>
+    <div class="metric-unit">healthy ratio indicator</div>
+  </div>
+</div>
+
+<div class="alerts-row" id="alertsRow"></div>
+
+<div class="charts-row">
+  <div class="chart-card">
+    <div class="chart-title">M1 freq vs hole size — all fibre angles</div>
+    <div class="legend">
+      <span><span class="leg-box" style="background:#4a9eff"></span>0°</span>
+      <span><span class="leg-box" style="background:#2ecc8e"></span>30°</span>
+      <span><span class="leg-box" style="background:#ff7c4a"></span>45°</span>
+      <span><span class="leg-box" style="background:#e05b8c"></span>0/45°</span>
+    </div>
+    <div style="position:relative;height:220px;">
+      <canvas id="m1Chart" role="img" aria-label="M1 frequency vs hole size for all fibre angles">M1 frequency decreases as hole size increases.</canvas>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">All modes vs hole size — 0° fibre angle</div>
+    <div class="legend">
+      <span><span class="leg-box" style="background:#4a9eff"></span>M1</span>
+      <span><span class="leg-box" style="background:#2ecc8e"></span>M2</span>
+      <span><span class="leg-box" style="background:#ff7c4a"></span>M3</span>
+      <span><span class="leg-box" style="background:#e05b8c"></span>M4</span>
+      <span><span class="leg-box" style="background:#9b7cff"></span>M5</span>
+    </div>
+    <div style="position:relative;height:220px;">
+      <canvas id="modesChart" role="img" aria-label="All 5 mode frequencies vs hole size at 0 degree">All mode frequencies vs hole size.</canvas>
+    </div>
+  </div>
+</div>
+
+<div class="chart-full">
+  <div class="chart-title">M1 baseline comparison — all boundary conditions (10mm hole · 0° fibre)</div>
+  <div style="position:relative;height:200px;">
+    <canvas id="bcChart" role="img" aria-label="Bar chart comparing M1 baseline across all boundary conditions">M1 baseline comparison across boundary conditions.</canvas>
+  </div>
+</div>
+
+<div class="ratio-card">
+  <div class="chart-title">Damage indicator — M2/M1 ratio</div>
+  <div class="ratio-info" id="ratioInfo"></div>
+</div>
+
+<div class="footer">
+  <span>MTech Project · GFRP Plate SHM · Abaqus FEA Analysis</span>
+  <span id="footerBC">Boundary Condition: FFFF</span>
+</div>
+
+<script>
+const DATA = {
+  FFFF: {
+    label: 'FFFF — all free',
+    baselines: [83.87, 117.56, 207.46, 264.27, 313.89],
+    slope: -0.367,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [83.87,83.56,81.71,79.08,74.45,67.64,66.59,61.57,55.36],
+      '30':   [91.49,90.32,87.63,84.28,79.45,73.19,70.74,65.21,57.96],
+      '45':   [94.05,92.38,89.25,85.56,80.80,74.94,72.00,66.34,58.66],
+      '0/45': [103.77,102.85,100.03,96.18,90.02,79.90,78.89,72.12,63.61]
+    },
+    modes0: {
+      M1:[83.87,83.56,81.71,79.08,74.45,67.64,66.59,61.57,55.36],
+      M2:[117.56,115.29,111.25,106.71,100.65,90.72,89.91,82.96,73.22],
+      M3:[207.46,208.76,207.82,205.46,198.45,186.35,190.92,186.07,183.46],
+      M4:[264.27,261.60,255.46,249.78,241.34,227.41,237.28,237.66,237.23],
+      M5:[313.89,316.47,315.68,308.50,290.23,260.48,265.13,253.22,239.26]
+    }
+  },
+  CCCC: {
+    label: 'CCCC — all fixed',
+    baselines: [305.04, 457.15, 733.60, 755.52, 867.28],
+    slope: 8.5,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [305.04,310.80,324.36,350.06,381.27,387.96,467.83,526.07,615.62],
+      '30':   [295.12,300.96,314.00,338.52,369.11,379.74,459.51,518.47,605.19],
+      '45':   [291.86,297.71,310.57,334.66,364.90,376.46,455.99,515.39,601.12],
+      '0/45': [298.82,304.75,317.95,342.83,373.58,383.19,463.25,522.09,609.87]
+    },
+    modes0: {
+      M1:[305.04,310.80,324.36,350.06,381.27,387.96,467.83,526.07,615.62],
+      M2:[457.15,455.37,444.59,432.40,422.96,411.95,470.57,527.90,616.21],
+      M3:[733.60,739.31,717.07,703.88,722.16,720.78,832.55,880.43,948.01],
+      M4:[755.52,745.07,762.00,810.33,816.07,779.37,840.44,886.71,952.69],
+      M5:[867.28,866.55,856.36,841.12,884.94,974.74,1280.2,1432.5,1530.3]
+    }
+  },
+  FCCF: {
+    label: 'FCCF — adjacent fixed',
+    baselines: [54.93, 147.59, 272.75, 347.77, 361.04],
+    slope: -0.09,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [54.93,54.97,54.50,53.79,52.08,49.31,50.13,49.00,47.86],
+      '30':   [54.99,54.94,54.31,53.39,51.40,48.27,48.71,47.00,44.90],
+      '45':   [56.72,56.62,55.91,54.90,52.76,49.35,49.82,48.00,45.83],
+      '0/45': [56.16,56.13,55.56,54.72,52.80,49.62,50.43,49.00,47.44]
+    },
+    modes0: {
+      M1:[54.93,54.97,54.50,53.79,52.08,49.31,50.13,49.00,47.86],
+      M2:[147.59,148.05,147.50,146.67,143.20,134.42,141.69,142.27,146.31],
+      M3:[272.75,273.12,272.63,273.91,271.72,263.69,274.04,272.63,270.38],
+      M4:[347.77,347.75,343.17,335.37,321.74,297.56,313.79,312.15,310.88],
+      M5:[361.04,362.47,364.97,373.20,380.62,372.43,424.08,456.55,499.05]
+    }
+  },
+  FCFC: {
+    label: 'FCFC — opposite fixed (long)',
+    baselines: [265.15, 279.69, 340.19, 497.54, 724.12],
+    slope: 1.6,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [265.15,268.17,271.31,274.88,272.93,261.45,277.94,278.37,279.55],
+      '30':   [236.61,239.19,242.05,246.34,247.12,240.04,252.74,252.13,252.19],
+      '45':   [227.01,229.44,232.13,236.44,237.84,232.68,244.05,243.25,243.06],
+      '0/45': [247.19,250.02,253.07,257.35,257.51,248.52,263.21,263.24,264.03]
+    },
+    modes0: {
+      M1:[265.15,268.17,271.31,274.88,272.93,261.45,277.94,278.37,279.55],
+      M2:[279.69,281.61,281.44,281.06,277.70,275.15,279.59,279.94,281.04],
+      M3:[340.19,343.98,353.86,376.03,404.05,413.02,483.01,524.36,578.85],
+      M4:[497.54,495.54,482.55,466.87,451.53,435.65,485.24,525.66,579.58],
+      M5:[724.12,723.37,706.10,695.11,703.03,680.36,729.47,729.05,729.02]
+    }
+  },
+  CFCF: {
+    label: 'CFCF — opposite fixed (short)',
+    baselines: [118.54, 147.96, 326.39, 337.31, 367.67],
+    slope: 0.5,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [118.54,119.09,119.82,121.89,123.83,118.76,136.40,146.71,163.58],
+      '30':   [104.86,105.25,105.72,107.41,109.24,105.83,122.11,133.65,152.42],
+      '45':   [100.57,100.92,101.33,102.89,104.65,101.59,117.11,128.59,147.40],
+      '0/45': [110.24,110.76,111.41,113.31,115.18,111.03,128.18,139.61,158.20]
+    },
+    modes0: {
+      M1:[118.54,119.09,119.82,121.89,123.83,118.76,136.40,146.71,163.58],
+      M2:[147.96,148.85,148.48,147.72,144.73,136.39,146.85,152.16,165.69],
+      M3:[326.39,325.96,320.72,312.39,299.96,274.94,298.71,307.96,320.41],
+      M4:[337.31,332.85,327.61,327.49,327.31,319.87,338.98,334.43,332.37],
+      M5:[367.67,367.64,363.80,358.74,348.39,326.12,367.24,409.32,477.28]
+    }
+  },
+  FCFF: {
+    label: 'FCFF — cantilever long',
+    baselines: [41.48, 65.60, 158.25, 260.55, 294.80],
+    slope: -0.06,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [41.48,41.58,41.27,40.72,39.28,36.94,37.44,36.59,36.28],
+      '30':   [36.59,36.70,36.42,35.92,34.65,33.18,32.91,32.00,31.55],
+      '45':   [35.19,35.31,35.05,34.59,33.37,32.09,31.71,30.79,30.34],
+      '0/45': [38.52,38.65,38.39,37.92,36.61,34.73,34.93,34.09,33.74]
+    },
+    modes0: {
+      M1:[41.48,41.58,41.27,40.72,39.28,36.94,37.44,36.59,36.28],
+      M2:[65.60,65.61,64.84,63.78,61.36,57.61,58.34,56.12,53.53],
+      M3:[158.25,158.21,156.65,154.45,148.83,138.70,141.53,136.65,132.45],
+      M4:[260.55,260.82,260.18,261.53,260.09,250.51,266.15,268.03,259.29],
+      M5:[294.80,296.95,296.28,294.02,286.49,273.28,278.45,270.26,270.42]
+    }
+  },
+  FFCF: {
+    label: 'FFCF — cantilever short',
+    baselines: [18.80, 50.99, 116.38, 180.89, 280.86],
+    slope: -0.08,
+    holes: [10,20,30,40,50,60,70,80,90],
+    m1: {
+      '0':    [18.80,18.75,18.52,18.17,17.42,15.60,15.77,14.43,12.33],
+      '30':   [16.46,16.39,16.19,15.87,15.23,13.87,13.80,12.62,10.76],
+      '45':   [15.85,15.77,15.57,15.25,14.64,13.38,13.26,12.10,10.29],
+      '0/45': [17.48,17.42,17.22,16.91,16.25,14.68,14.79,13.56,11.58]
+    },
+    modes0: {
+      M1:[18.80,18.75,18.52,18.17,17.42,15.60,15.77,14.43,12.33],
+      M2:[50.99,50.87,49.91,48.60,46.21,42.27,42.69,40.68,38.17],
+      M3:[116.38,115.49,113.89,112.78,110.90,103.81,111.82,112.92,114.36],
+      M4:[180.89,181.84,180.82,178.82,173.47,162.97,169.50,169.41,174.71],
+      M5:[280.86,278.67,273.29,268.78,261.03,248.56,256.73,253.93,249.88]
+    }
+  }
+};
+
+const BC_COLORS = ['#4a9eff','#2ecc8e','#ff7c4a','#e05b8c','#9b7cff','#f5a623','#1ab8a4'];
+const BC_KEYS = Object.keys(DATA);
+
+let currentBC = 'FFFF';
+let m1ChartObj, modesChartObj, bcChartObj;
+
+const tabsEl = document.getElementById('bcTabs');
+BC_KEYS.forEach(bc => {
+  const btn = document.createElement('button');
+  btn.className = 'bc-tab' + (bc === 'FFFF' ? ' active' : '');
+  btn.textContent = bc;
+  btn.title = DATA[bc].label;
+  btn.onclick = () => setBC(bc);
+  tabsEl.appendChild(btn);
+});
+
+function buildBCChart() {
+  const values = BC_KEYS.map(bc => DATA[bc].baselines[0]);
+  bcChartObj = new Chart(document.getElementById('bcChart'), {
+    type: 'bar',
+    data: {
+      labels: BC_KEYS,
+      datasets: [{
+        data: values,
+        backgroundColor: BC_COLORS,
+        borderWidth: 0,
+        borderRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(2) + ' Hz' } }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b8fa8', font: { size: 11, family: 'DM Mono' } },
+          grid: { display: false },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        },
+        y: {
+          ticks: { color: '#8b8fa8', font: { size: 11, family: 'DM Mono' }, callback: v => v + ' Hz' },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
+function setBC(bc) {
+  currentBC = bc;
+  document.querySelectorAll('.bc-tab').forEach(b => b.classList.toggle('active', b.textContent === bc));
+  document.getElementById('footerBC').textContent = 'Boundary Condition: ' + bc + ' — ' + DATA[bc].label;
+  updateMetrics();
+  updateAlerts();
+  updateM1Chart();
+  updateModesChart();
+}
+
+function updateMetrics() {
+  const d = DATA[currentBC];
+  const m1 = d.baselines[0];
+  const m2 = d.baselines[1];
+  document.getElementById('m1base').textContent = m1.toFixed(2);
+  document.getElementById('m2base').textContent = m2.toFixed(2);
+  document.getElementById('m3base').textContent = d.baselines[2].toFixed(2);
+  document.getElementById('ratio').textContent = (m2/m1).toFixed(3);
+}
+
+function updateAlerts() {
+  const b = DATA[currentBC].baselines[0];
+  const n1 = (b*0.95).toFixed(2);
+  const n2 = (b*1.05).toFixed(2);
+  const w1 = (b*0.85).toFixed(2);
+  const w2 = (b*0.95).toFixed(2);
+  const c  = (b*0.85).toFixed(2);
+  document.getElementById('alertsRow').innerHTML = `
+    <div class="alert-box a-ok">
+      <div class="a-title">Normal</div>
+      <div class="a-range">${n1} – ${n2} Hz</div>
+      <div class="a-desc">M1 within ±5% of baseline — healthy plate</div>
+    </div>
+    <div class="alert-box a-warn">
+      <div class="a-title">Warning</div>
+      <div class="a-range">${w1} – ${w2} Hz</div>
+      <div class="a-desc">M1 drops 5–15% — minor damage or boundary change</div>
+    </div>
+    <div class="alert-box a-danger">
+      <div class="a-title">Critical</div>
+      <div class="a-range">below ${c} Hz</div>
+      <div class="a-desc">M1 drops &gt;15% — significant structural change</div>
+    </div>
+  `;
+  const m1 = DATA[currentBC].baselines[0];
+  const m2 = DATA[currentBC].baselines[1];
+  const ratio = (m2/m1).toFixed(3);
+  document.getElementById('ratioInfo').innerHTML =
+    `Healthy M2/M1 ratio for ${currentBC}: ${ratio}<br>` +
+    `If this ratio changes significantly during monitoring, it indicates structural damage<br>` +
+    `even if absolute frequencies drift due to temperature or boundary changes.<br>` +
+    `M1 slope: ${DATA[currentBC].slope.toFixed(3)} Hz/mm — frequency shift per mm of hole growth`;
+}
+
+function updateM1Chart() {
+  const d = DATA[currentBC];
+  if (m1ChartObj) m1ChartObj.destroy();
+  m1ChartObj = new Chart(document.getElementById('m1Chart'), {
+    type: 'line',
+    data: {
+      labels: d.holes,
+      datasets: [
+        { label: '0°',    data: d.m1['0'],    borderColor: '#4a9eff', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#4a9eff', tension: 0.3, fill: false },
+        { label: '30°',   data: d.m1['30'],   borderColor: '#2ecc8e', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#2ecc8e', tension: 0.3, fill: false, borderDash: [5,3] },
+        { label: '45°',   data: d.m1['45'],   borderColor: '#ff7c4a', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ff7c4a', tension: 0.3, fill: false, borderDash: [2,2] },
+        { label: '0/45°', data: d.m1['0/45'], borderColor: '#e05b8c', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#e05b8c', tension: 0.3, fill: false, borderDash: [8,3] }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Hz' } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Hole size (mm)', color: '#555a70', font: { size: 11, family: 'DM Mono' } },
+          ticks: { color: '#8b8fa8', font: { size: 11 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        },
+        y: {
+          title: { display: true, text: 'Frequency (Hz)', color: '#555a70', font: { size: 11, family: 'DM Mono' } },
+          ticks: { color: '#8b8fa8', font: { size: 11 }, callback: v => v.toFixed(0) },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
+function updateModesChart() {
+  const d = DATA[currentBC];
+  if (modesChartObj) modesChartObj.destroy();
+  modesChartObj = new Chart(document.getElementById('modesChart'), {
+    type: 'line',
+    data: {
+      labels: d.holes,
+      datasets: [
+        { label: 'M1', data: d.modes0.M1, borderColor: '#4a9eff', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false },
+        { label: 'M2', data: d.modes0.M2, borderColor: '#2ecc8e', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, borderDash: [5,3] },
+        { label: 'M3', data: d.modes0.M3, borderColor: '#ff7c4a', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, borderDash: [2,2] },
+        { label: 'M4', data: d.modes0.M4, borderColor: '#e05b8c', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, borderDash: [8,3] },
+        { label: 'M5', data: d.modes0.M5, borderColor: '#9b7cff', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, borderDash: [4,2] }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Hz' } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Hole size (mm)', color: '#555a70', font: { size: 11, family: 'DM Mono' } },
+          ticks: { color: '#8b8fa8', font: { size: 11 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        },
+        y: {
+          title: { display: true, text: 'Frequency (Hz)', color: '#555a70', font: { size: 11, family: 'DM Mono' } },
+          ticks: { color: '#8b8fa8', font: { size: 11 }, callback: v => v.toFixed(0) },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          border: { color: 'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
+buildBCChart();
+setBC('FFFF');
+</script>
+</body>
+</html>

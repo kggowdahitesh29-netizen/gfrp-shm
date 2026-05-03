@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SHM Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #0f1117; color: #fff; padding: 20px; }
+  h1 { font-size: 20px; margin-bottom: 16px; color: #ccc; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card { background: #1e2130; border-radius: 10px; padding: 16px; }
+  .label { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .value { font-size: 26px; font-weight: bold; }
+  .ok { color: #4caf50; }
+  .warn { color: #ff9800; }
+  .danger { color: #f44336; }
+  .chart-card { background: #1e2130; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .chart-title { font-size: 13px; color: #888; margin-bottom: 10px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .alert-box { border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  .a-ok { background: #1b3a1f; color: #81c784; }
+  .a-warn { background: #3a2e00; color: #ffb74d; }
+  .a-danger { background: #3a0f0f; color: #e57373; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; font-weight: bold; margin-left: 8px; }
+  .pill-ok { background: #4caf50; color: #000; }
+  .pill-warn { background: #ff9800; color: #000; }
+  .pill-danger { background: #f44336; color: #fff; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .blink { animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  input[type=range] { width: 100%; }
+  .thresh-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px; }
+  .thresh-row label { width: 100px; color: #888; }
+  .thresh-row span { min-width: 40px; color: #fff; font-weight: bold; }
+  button { margin-top: 10px; background: #2a2f45; color: #fff; border: 1px solid #444; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #3a4060; }
+</style>
+</head>
+<body>
+
+<h1>
+  GFRP Structural Health Monitoring
+  <span class="pill pill-ok" id="statusPill">Normal</span>
+  <span style="font-size:12px;color:#555;float:right;" id="lastSeen">Waiting for data...</span>
+</h1>
+
+<div class="grid">
+  <div class="card">
+    <div class="label">Current Frequency</div>
+    <div class="value ok" id="freqVal">--</div>
+    <div style="font-size:11px;color:#555;margin-top:4px;">Hz</div>
+  </div>
+  <div class="card">
+    <div class="label">Baseline Frequency</div>
+    <div class="value" id="baseVal">--</div>
+    <div style="font-size:11px;color:#555;margin-top:4px;">Hz</div>
+  </div>
+  <div class="card">
+    <div class="label">Deviation</div>
+    <div class="value" id="devVal">--</div>
+    <div style="font-size:11px;color:#555;margin-top:4px;">%</div>
+  </div>
+  <div class="card">
+    <div class="label">Peak Acceleration</div>
+    <div class="value" id="accelVal">--</div>
+    <div style="font-size:11px;color:#555;margin-top:4px;">m/s²</div>
+  </div>
+</div>
+
+<div class="two">
+  <div class="chart-card">
+    <div class="chart-title">Frequency over time</div>
+    <div style="position:relative;height:200px;">
+      <canvas id="freqChart"></canvas>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Acceleration X / Y / Z</div>
+    <div style="position:relative;height:200px;">
+      <canvas id="accelChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="two">
+  <div class="chart-card">
+    <div class="chart-title">Alert Log</div>
+    <div id="alertLog" style="max-height:160px;overflow-y:auto;">
+      <div class="alert-box a-ok"><div class="dot" style="background:#4caf50"></div>System started — waiting for sensor data</div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Thresholds</div>
+    <div class="thresh-row">
+      <label>Warning at</label>
+      <input type="range" min="1" max="20" value="5" step="1" id="warnT">
+      <span id="warnTVal">5%</span>
+    </div>
+    <div class="thresh-row">
+      <label>Danger at</label>
+      <input type="range" min="5" max="40" value="15" step="1" id="dangerT">
+      <span id="dangerTVal">15%</span>
+    </div>
+    <button onclick="resetBaseline()">Set current as baseline</button>
+  </div>
+</div>
+
+<script>
+  const MAX = 60;
+  let baseline = null;
+  let lastFreq = null;
+  let warnPct = 5, dangerPct = 15;
+  let lastAlertType = 'ok';
+  let freqData = [], accelXData = [], accelYData = [], accelZData = [], labels = [];
+
+  document.getElementById('warnT').addEventListener('input', function() {
+    warnPct = parseInt(this.value);
+    document.getElementById('warnTVal').textContent = warnPct + '%';
+  });
+  document.getElementById('dangerT').addEventListener('input', function() {
+    dangerPct = parseInt(this.value);
+    document.getElementById('dangerTVal').textContent = dangerPct + '%';
+  });
+
+  function resetBaseline() {
+    if (lastFreq !== null) {
+      baseline = lastFreq;
+      document.getElementById('baseVal').textContent = baseline.toFixed(2);
+      addAlert('ok', 'Baseline reset to ' + baseline.toFixed(2) + ' Hz');
+    }
+  }
+
+  function timeNow() {
+    return new Date().toLocaleTimeString();
+  }
+
+  function addAlert(type, msg) {
+    const log = document.getElementById('alertLog');
+    const div = document.createElement('div');
+    const colors = { ok: '#4caf50', warn: '#ff9800', danger: '#f44336' };
+    div.className = 'alert-box a-' + type;
+    div.innerHTML = '<div class="dot" style="background:' + colors[type] + '"></div><span>[' + timeNow() + '] ' + msg + '</span>';
+    log.insertBefore(div, log.firstChild);
+    if (log.children.length > 30) log.removeChild(log.lastChild);
+  }
+
+  const freqCtx = document.getElementById('freqChart').getContext('2d');
+  const freqChart = new Chart(freqCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Freq (Hz)', data: [], borderColor: '#4fc3f7', borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'Warn+', data: [], borderColor: '#ff9800', borderWidth: 1, borderDash: [4,3], pointRadius: 0, fill: false },
+        { label: 'Warn-', data: [], borderColor: '#ff9800', borderWidth: 1, borderDash: [4,3], pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 5, color: '#666', font: { size: 11 } }, grid: { color: '#222' } },
+        y: { ticks: { color: '#666', font: { size: 11 } }, grid: { color: '#222' } }
+      }
+    }
+  });
+
+  const accelCtx = document.getElementById('accelChart').getContext('2d');
+  const accelChart = new Chart(accelCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'X', data: [], borderColor: '#f44336', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'Y', data: [], borderColor: '#4fc3f7', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false, borderDash: [3,2] },
+        { label: 'Z', data: [], borderColor: '#66bb6a', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false, borderDash: [6,3] }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { labels: { color: '#888', font: { size: 11 }, boxWidth: 10 } } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 5, color: '#666', font: { size: 11 } }, grid: { color: '#222' } },
+        y: { ticks: { color: '#666', font: { size: 11 } }, grid: { color: '#222' } }
+      }
+    }
+  });
+
+  // WebSocket connection
+  const ws = new WebSocket('ws://localhost:3000');
+
+  ws.onopen = function() {
+    addAlert('ok', 'Dashboard connected to server');
+  };
+
+  ws.onclose = function() {
+    addAlert('danger', 'Disconnected from server — refresh page');
+  };
+
+  ws.onmessage = function(event) {
+    const d = JSON.parse(event.data);
+    const freq = parseFloat(d.freq);
+    const ax = parseFloat(d.ax);
+    const ay = parseFloat(d.ay);
+    const az = parseFloat(d.az);
+    const label = timeNow();
+
+    lastFreq = freq;
+    if (baseline === null) {
+      baseline = freq;
+      document.getElementById('baseVal').textContent = baseline.toFixed(2);
+    }
+
+    const dev = ((freq - baseline) / baseline) * 100;
+    const absDev = Math.abs(dev);
+    const peak = Math.sqrt(ax*ax + ay*ay + az*az);
+
+    document.getElementById('freqVal').textContent = freq.toFixed(2);
+    document.getElementById('devVal').textContent = (dev >= 0 ? '+' : '') + dev.toFixed(1);
+    document.getElementById('accelVal').textContent = peak.toFixed(3);
+    document.getElementById('lastSeen').textContent = 'Last update: ' + label;
+
+    // Alert logic
+    let type = 'ok';
+    if (absDev >= dangerPct) type = 'danger';
+    else if (absDev >= warnPct) type = 'warning';
+
+    const pill = document.getElementById('statusPill');
+    const freqEl = document.getElementById('freqVal');
+    const devEl = document.getElementById('devVal');
+
+    if (type === 'danger') {
+      pill.className = 'pill pill-danger'; pill.textContent = 'DANGER';
+      freqEl.className = 'value danger'; devEl.className = 'value danger';
+      if (lastAlertType !== 'danger') addAlert('danger', 'Anomaly! Freq=' + freq.toFixed(2) + ' Hz, deviation=' + dev.toFixed(1) + '%');
+    } else if (type === 'warning') {
+      pill.className = 'pill pill-warn'; pill.textContent = 'Warning';
+      freqEl.className = 'value warn'; devEl.className = 'value warn';
+      if (lastAlertType !== 'warning') addAlert('warn', 'Warning! Freq=' + freq.toFixed(2) + ' Hz, deviation=' + dev.toFixed(1) + '%');
+    } else {
+      pill.className = 'pill pill-ok'; pill.textContent = 'Normal';
+      freqEl.className = 'value ok'; devEl.className = 'value ok';
+      if (lastAlertType !== 'ok') addAlert('ok', 'Frequency back to normal');
+    }
+    lastAlertType = type;
+
+    // Update charts
+    freqData.push(freq); accelXData.push(ax); accelYData.push(ay); accelZData.push(az); labels.push(label);
+    if (freqData.length > MAX) { freqData.shift(); accelXData.shift(); accelYData.shift(); accelZData.shift(); labels.shift(); }
+
+    const warnHigh = baseline * (1 + warnPct/100);
+    const warnLow  = baseline * (1 - warnPct/100);
+
+    freqChart.data.labels = labels;
+    freqChart.data.datasets[0].data = freqData;
+    freqChart.data.datasets[1].data = new Array(freqData.length).fill(parseFloat(warnHigh.toFixed(2)));
+    freqChart.data.datasets[2].data = new Array(freqData.length).fill(parseFloat(warnLow.toFixed(2)));
+    freqChart.update('none');
+
+    accelChart.data.labels = labels;
+    accelChart.data.datasets[0].data = accelXData;
+    accelChart.data.datasets[1].data = accelYData;
+    accelChart.data.datasets[2].data = accelZData;
+    accelChart.update('none');
+  };
+</script>
+</body>
+</html>

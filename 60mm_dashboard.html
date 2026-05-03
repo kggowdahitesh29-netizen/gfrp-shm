@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GFRP SHM — FFFF 60mm Baseline</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --bg2: #111318;
+    --bg3: #181c22;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --text2: #8b8fa8;
+    --text3: #555a70;
+    --blue: #4a9eff;
+    --ok: #2ecc8e;
+    --warn: #f5a623;
+    --danger: #ff4a4a;
+    --ok-bg: rgba(46,204,142,0.08);
+    --warn-bg: rgba(245,166,35,0.08);
+    --danger-bg: rgba(255,74,74,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 0.5px solid var(--border2);
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-bottom: 4px;
+  }
+  .header p {
+    font-size: 12px;
+    color: var(--text2);
+    font-family: 'DM Mono', monospace;
+  }
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(74,158,255,0.12);
+    color: var(--blue);
+    border: 0.5px solid rgba(74,158,255,0.25);
+  }
+  .status-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .pill-ok { background: rgba(46,204,142,0.15); color: var(--ok); border: 0.5px solid rgba(46,204,142,0.3); }
+  .pill-warn { background: rgba(245,166,35,0.15); color: var(--warn); border: 0.5px solid rgba(245,166,35,0.3); }
+  .pill-danger { background: rgba(255,74,74,0.15); color: var(--danger); border: 0.5px solid rgba(255,74,74,0.3); }
+
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .metric-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .metric-label {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+  .metric-value {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+  .metric-unit {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    margin-top: 2px;
+  }
+  .val-ok { color: var(--ok); }
+  .val-warn { color: var(--warn); }
+  .val-danger { color: var(--danger); }
+  .val-normal { color: var(--text); }
+
+  .alerts-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .alert-box {
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'DM Mono', monospace;
+    border: 0.5px solid;
+  }
+  .a-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .a-range { font-size: 13px; font-weight: 500; }
+  .a-desc { font-size: 11px; margin-top: 3px; opacity: 0.7; }
+  .a-ok { background: var(--ok-bg); border-color: rgba(46,204,142,0.25); color: var(--ok); }
+  .a-warn { background: var(--warn-bg); border-color: rgba(245,166,35,0.25); color: var(--warn); }
+  .a-danger { background: var(--danger-bg); border-color: rgba(255,74,74,0.25); color: var(--danger); }
+
+  .charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .chart-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .chart-title {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text2);
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+  }
+
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .info-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 7px 0;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .log-ok { background: var(--ok); }
+  .log-warn { background: var(--warn); }
+  .log-danger { background: var(--danger); }
+  .log-text { color: var(--text2); }
+  .log-text strong { color: var(--text); }
+
+  .baseline-info {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 2;
+  }
+  .baseline-info span { color: var(--text); font-weight: 500; }
+
+  .thresh-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-family: 'DM Mono', monospace;
+  }
+  .thresh-row label { width: 120px; color: var(--text2); font-size: 12px; }
+  input[type=range] { flex: 1; accent-color: var(--blue); }
+  .thresh-val { min-width: 40px; color: var(--text); font-weight: 500; font-size: 12px; }
+
+  button {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--bg3);
+    color: var(--text);
+    border: 0.5px solid var(--border2);
+    margin-top: 10px;
+    transition: all 0.15s;
+  }
+  button:hover { border-color: var(--blue); color: var(--blue); }
+
+  .footer {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 0.5px solid var(--border);
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <h1><span class="live-dot" id="liveDot"></span>GFRP SHM — Live Monitoring</h1>
+    <p>Boundary: FFFF · Baseline: 60mm hole · 0° fibre · M1 = 67.64 Hz</p>
+  </div>
+  <div class="header-right">
+    <span class="badge">LIVE · ESP8266 + ADXL345</span>
+    <span class="status-pill pill-ok" id="statusPill">Normal</span>
+    <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;" id="lastSeen">Waiting for data...</span>
+  </div>
+</div>
+
+<!-- Metrics -->
+<div class="metrics-grid">
+  <div class="metric-card">
+    <div class="metric-label">Current Freq (M1)</div>
+    <div class="metric-value val-ok" id="freqVal">--</div>
+    <div class="metric-unit">Hz</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Baseline (M1)</div>
+    <div class="metric-value val-normal">67.64</div>
+    <div class="metric-unit">Hz · FFFF · 60mm hole</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Deviation</div>
+    <div class="metric-value val-normal" id="devVal">--</div>
+    <div class="metric-unit">% from baseline</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Peak Accel</div>
+    <div class="metric-value val-normal" id="accelVal">--</div>
+    <div class="metric-unit">m/s²</div>
+  </div>
+</div>
+
+<!-- Alert thresholds display -->
+<div class="alerts-row">
+  <div class="alert-box a-ok">
+    <div class="a-title">Normal</div>
+    <div class="a-range">64.26 – 71.02 Hz</div>
+    <div class="a-desc">M1 within ±5% of 67.64 Hz — healthy plate</div>
+  </div>
+  <div class="alert-box a-warn">
+    <div class="a-title">Warning</div>
+    <div class="a-range">57.49 – 64.26 Hz</div>
+    <div class="a-desc">M1 drops 5–15% — minor damage detected</div>
+  </div>
+  <div class="alert-box a-danger">
+    <div class="a-title">Critical</div>
+    <div class="a-range">below 57.49 Hz</div>
+    <div class="a-desc">M1 drops &gt;15% — significant structural change</div>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="charts-row">
+  <div class="chart-card">
+    <div class="chart-title">Live frequency over time</div>
+    <div style="position:relative;height:200px;">
+      <canvas id="freqChart"></canvas>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Acceleration X / Y / Z</div>
+    <div style="position:relative;height:200px;">
+      <canvas id="accelChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom row -->
+<div class="bottom-row">
+  <div class="info-card">
+    <div class="chart-title">Alert log</div>
+    <div id="alertLog" style="max-height:180px;overflow-y:auto;">
+      <div class="log-entry">
+        <div class="log-dot log-ok"></div>
+        <div class="log-text"><strong>System started</strong> — monitoring active · FFFF baseline 67.64 Hz</div>
+      </div>
+    </div>
+  </div>
+  <div class="info-card">
+    <div class="chart-title">Baseline reference — FFFF · 60mm hole · 0°</div>
+    <div class="baseline-info">
+      M1 (primary) : <span>67.64 Hz</span><br>
+      M2            : <span>90.72 Hz</span><br>
+      M3            : <span>186.35 Hz</span><br>
+      M4            : <span>227.41 Hz</span><br>
+      M5            : <span>260.48 Hz</span><br>
+      M2/M1 ratio   : <span>1.341</span><br>
+      Slope         : <span>−0.367 Hz/mm</span>
+    </div>
+    <button onclick="resetBaseline()">Reset baseline to current freq</button>
+  </div>
+</div>
+
+<div class="footer">
+  <span>MTech Project · GFRP Plate SHM · ESP8266 + ADXL345</span>
+  <span id="footerTime"></span>
+</div>
+
+<script>
+// ── Baseline from Abaqus FFFF 60mm hole 0° fibre ──
+const BASELINE_M1 = 67.64;
+const WARN_PCT    = 5;
+const DANGER_PCT  = 15;
+
+let currentBaseline = BASELINE_M1;
+let lastFreq = null;
+let lastAlertType = 'ok';
+let freqData = [], axData = [], ayData = [], azData = [], labels = [];
+const MAX_POINTS = 60;
+
+// ── Charts ──
+const freqCtx = document.getElementById('freqChart').getContext('2d');
+const freqChart = new Chart(freqCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Freq (Hz)',
+        data: [],
+        borderColor: '#4a9eff',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false
+      },
+      {
+        label: 'Warn+',
+        data: [],
+        borderColor: '#f5a623',
+        borderWidth: 1,
+        borderDash: [5,3],
+        pointRadius: 0,
+        fill: false
+      },
+      {
+        label: 'Warn-',
+        data: [],
+        borderColor: '#f5a623',
+        borderWidth: 1,
+        borderDash: [5,3],
+        pointRadius: 0,
+        fill: false
+      },
+      {
+        label: 'Danger-',
+        data: [],
+        borderColor: '#ff4a4a',
+        borderWidth: 1,
+        borderDash: [2,2],
+        pointRadius: 0,
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#555a70', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { color: 'rgba(255,255,255,0.07)' } },
+      y: { ticks: { color: '#555a70', font: { size: 10, family: 'DM Mono' }, callback: v => v.toFixed(1) }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { color: 'rgba(255,255,255,0.07)' } }
+    }
+  }
+});
+
+const accelCtx = document.getElementById('accelChart').getContext('2d');
+const accelChart = new Chart(accelCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'X', data: [], borderColor: '#ff4a4a', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
+      { label: 'Y', data: [], borderColor: '#4a9eff', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false, borderDash: [4,2] },
+      { label: 'Z', data: [], borderColor: '#2ecc8e', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false, borderDash: [2,2] }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { labels: { color: '#8b8fa8', font: { size: 10, family: 'DM Mono' }, boxWidth: 10 } } },
+    scales: {
+      x: { ticks: { color: '#555a70', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { color: 'rgba(255,255,255,0.07)' } },
+      y: { ticks: { color: '#555a70', font: { size: 10, family: 'DM Mono' } }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { color: 'rgba(255,255,255,0.07)' } }
+    }
+  }
+});
+
+// ── Helpers ──
+function timeNow() {
+  return new Date().toLocaleTimeString();
+}
+
+function addLog(type, msg) {
+  const log = document.getElementById('alertLog');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  const dot = document.createElement('div');
+  dot.className = 'log-dot log-' + type;
+  const text = document.createElement('div');
+  text.className = 'log-text';
+  text.innerHTML = '<strong>[' + timeNow() + ']</strong> ' + msg;
+  div.appendChild(dot);
+  div.appendChild(text);
+  log.insertBefore(div, log.firstChild);
+  if (log.children.length > 30) log.removeChild(log.lastChild);
+}
+
+function resetBaseline() {
+  if (lastFreq !== null) {
+    currentBaseline = lastFreq;
+    addLog('ok', 'Baseline reset to ' + currentBaseline.toFixed(2) + ' Hz');
+  }
+}
+
+// ── WebSocket connection to Node.js server ──
+const ws = new WebSocket('ws://localhost:3000');
+
+ws.onopen = function() {
+  addLog('ok', 'Dashboard connected to server');
+  document.getElementById('footerTime').textContent = 'Connected · ' + timeNow();
+};
+
+ws.onclose = function() {
+  addLog('danger', 'Disconnected from server — refresh page');
+};
+
+ws.onmessage = function(event) {
+  const d = JSON.parse(event.data);
+  const freq = parseFloat(d.freq);
+  const ax   = parseFloat(d.ax);
+  const ay   = parseFloat(d.ay);
+  const az   = parseFloat(d.az);
+  const label = timeNow();
+
+  lastFreq = freq;
+
+  // Deviation from baseline
+  const dev    = ((freq - currentBaseline) / currentBaseline) * 100;
+  const absDev = Math.abs(dev);
+  const peak   = Math.sqrt(ax*ax + ay*ay + az*az);
+
+  // Update metric cards
+  document.getElementById('freqVal').textContent  = freq.toFixed(2);
+  document.getElementById('devVal').textContent   = (dev >= 0 ? '+' : '') + dev.toFixed(1);
+  document.getElementById('accelVal').textContent = peak.toFixed(3);
+  document.getElementById('lastSeen').textContent = 'Last: ' + label;
+  document.getElementById('footerTime').textContent = 'Updated · ' + label;
+
+  // Warn/danger thresholds
+  const warnHigh   = currentBaseline * (1 + WARN_PCT/100);
+  const warnLow    = currentBaseline * (1 - WARN_PCT/100);
+  const dangerLow  = currentBaseline * (1 - DANGER_PCT/100);
+
+  // Alert state
+  let alertType = 'ok';
+  if (absDev >= DANGER_PCT) alertType = 'danger';
+  else if (absDev >= WARN_PCT) alertType = 'warning';
+
+  const pill    = document.getElementById('statusPill');
+  const freqEl  = document.getElementById('freqVal');
+  const devEl   = document.getElementById('devVal');
+
+  if (alertType === 'danger') {
+    pill.className = 'status-pill pill-danger';
+    pill.textContent = 'CRITICAL';
+    freqEl.className = 'metric-value val-danger';
+    devEl.className  = 'metric-value val-danger';
+    if (lastAlertType !== 'danger') addLog('danger', 'CRITICAL — Freq=' + freq.toFixed(2) + ' Hz, deviation=' + dev.toFixed(1) + '% — structural anomaly!');
+  } else if (alertType === 'warning') {
+    pill.className = 'status-pill pill-warn';
+    pill.textContent = 'Warning';
+    freqEl.className = 'metric-value val-warn';
+    devEl.className  = 'metric-value val-warn';
+    if (lastAlertType !== 'warning') addLog('warn', 'Warning — Freq=' + freq.toFixed(2) + ' Hz, deviation=' + dev.toFixed(1) + '%');
+  } else {
+    pill.className = 'status-pill pill-ok';
+    pill.textContent = 'Normal';
+    freqEl.className = 'metric-value val-ok';
+    devEl.className  = 'metric-value val-normal';
+    if (lastAlertType !== 'ok') addLog('ok', 'Frequency returned to normal range');
+  }
+  lastAlertType = alertType;
+
+  // Push data to arrays
+  freqData.push(freq);
+  axData.push(parseFloat(ax.toFixed(3)));
+  ayData.push(parseFloat(ay.toFixed(3)));
+  azData.push(parseFloat((az - 9.8).toFixed(3)));
+  labels.push(label);
+
+  if (freqData.length > MAX_POINTS) {
+    freqData.shift(); axData.shift(); ayData.shift(); azData.shift(); labels.shift();
+  }
+
+  // Update frequency chart
+  freqChart.data.labels = labels;
+  freqChart.data.datasets[0].data = freqData;
+  freqChart.data.datasets[1].data = new Array(freqData.length).fill(parseFloat(warnHigh.toFixed(2)));
+  freqChart.data.datasets[2].data = new Array(freqData.length).fill(parseFloat(warnLow.toFixed(2)));
+  freqChart.data.datasets[3].data = new Array(freqData.length).fill(parseFloat(dangerLow.toFixed(2)));
+  freqChart.update('none');
+
+  // Update accel chart
+  accelChart.data.labels = labels;
+  accelChart.data.datasets[0].data = axData;
+  accelChart.data.datasets[1].data = ayData;
+  accelChart.data.datasets[2].data = azData;
+  accelChart.update('none');
+};
+</script>
+</body>
+</html>
