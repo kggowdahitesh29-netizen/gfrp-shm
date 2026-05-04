@@ -7,7 +7,15 @@ const nodemailer = require('nodemailer');
 
 const app    = express();
 const server = http.createServer(app);
-const wss    = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+  server,
+  perMessageDeflate: false
+});
+
+wss.on('error', (err) => {
+  console.log('WebSocket server error:', err.message);
+});
+
 
 const PORT = process.env.PORT || 3000;
 
