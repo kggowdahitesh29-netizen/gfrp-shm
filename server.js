@@ -9,12 +9,10 @@ const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
 
-// Railway gives PORT automatically
 const PORT = process.env.PORT || 3000;
 
 const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwFBwZc868SvpnuvSAYlpoX2q3WneREYoh9Gmdr-xiZ3ljGvPR64k2rVZB0oDSYl6LY/exec';
 
-// ── Email config ──────────────────────────────────────────────────
 const EMAIL_FROM     = process.env.EMAIL_FROM     || 'your_gmail@gmail.com';
 const EMAIL_TO       = process.env.EMAIL_TO       || 'your_gmail@gmail.com';
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || 'your_app_password';
@@ -42,15 +40,19 @@ app.get('/mobile', (req, res) => {
 });
 
 app.post('/data', (req, res) => {
-  const { freq, ax, ay, az, ts, alert, deviation } = req.body;
+  const { freq, ax, ay, az, ts, alert, deviation, baseline } = req.body;
 
   if (freq === undefined) {
     return res.status(400).json({ error: 'Missing freq field' });
   }
 
-  const payload = JSON.stringify({ freq, ax, ay, az, ts, alert, deviation, serverTs: Date.now() });
+  const payload = JSON.stringify({
+    freq, ax, ay, az, ts,
+    alert, deviation, baseline,
+    serverTs: Date.now()
+  });
 
-  console.log(`[${new Date().toLocaleTimeString()}] freq=${freq} Hz  alert=${alert || 'NORMAL'}`);
+  console.log(`[${new Date().toLocaleTimeString()}] freq=${freq} Hz  alert=${alert || 'NORMAL'}  dev=${deviation || 0}%`);
 
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -93,7 +95,6 @@ function sendAlertEmail(alertState, freq, deviation, ax, ay, az) {
         <p style="margin:5px 0 0 0;opacity:0.9;">${new Date().toLocaleString()}</p>
       </div>
       <div style="background:#f9f9f9;padding:20px;border-radius:0 0 8px 8px;border:1px solid #ddd;">
-        <h3 style="color:#333;margin-top:0;">Structural Anomaly Detected</h3>
         <table style="width:100%;border-collapse:collapse;">
           <tr style="background:#fff;border-bottom:1px solid #eee;">
             <td style="padding:10px;color:#666;font-weight:bold;">Current Frequency</td>
@@ -123,7 +124,7 @@ function sendAlertEmail(alertState, freq, deviation, ax, ay, az) {
     </div>
   `;
 
-  transporter.sendMail({ from: EMAIL_FROM, to: EMAIL_TO, subject, html }, (err, info) => {
+  transporter.sendMail({ from: EMAIL_FROM, to: EMAIL_TO, subject, html }, (err) => {
     if (err) console.log('[Email] Error:', err.message);
     else console.log(`[Email] ${alertState} alert sent!`);
   });
@@ -134,7 +135,7 @@ function sendRecoveryEmail(freq) {
     from: EMAIL_FROM,
     to: EMAIL_TO,
     subject: `✅ GFRP SHM — Frequency returned to normal (${freq} Hz)`,
-    html: `<p>Frequency has returned to normal range.</p><p><strong>Current: ${freq} Hz</strong></p><p>Baseline: 83.87 Hz · Normal: 79.68–88.06 Hz</p>`
+    html: `<p>Frequency returned to normal.</p><p><strong>Current: ${freq} Hz</strong></p><p>Baseline: 83.87 Hz · Normal: 79.68–88.06 Hz</p>`
   }, (err) => {
     if (err) console.log('[Email] Error:', err.message);
     else console.log('[Email] Recovery email sent!');
