@@ -198,4 +198,13 @@ server.listen(PORT, () => {
   console.log(`SHM server running on port ${PORT}`);
   console.log(`Email alerts → ${EMAIL_TO}`);
   console.log(`Google Sheets logging every 5 seconds`);
+// Self ping to keep Render awake
+const RENDER_URL = 'https://gfrp-shm.onrender.com';
+setInterval(() => {
+  https.get(RENDER_URL, (res) => {
+    console.log('[Keepalive] Ping sent — status:', res.statusCode);
+  }).on('error', (err) => {
+    console.log('[Keepalive] Ping failed:', err.message);
+  });
+}, 4 * 60 * 1000); // every 4 minutes
 });
