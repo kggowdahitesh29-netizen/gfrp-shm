@@ -7,15 +7,10 @@ const nodemailer = require('nodemailer');
 
 const app    = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ 
+const wss    = new WebSocket.Server({ 
   server,
   perMessageDeflate: false
 });
-
-wss.on('error', (err) => {
-  console.log('WebSocket server error:', err.message);
-});
-
 
 const PORT = process.env.PORT || 3000;
 
@@ -199,14 +194,34 @@ function logToGoogleSheets(data) {
 
 wss.on('connection', ws => {
   console.log('Dashboard client connected.');
-  ws.on('close', () => console.log('Dashboard client disconnected.'));
+
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  }, 30000);
+
+  ws.on('pong', () => {
+    console.log('Dashboard client pong received');
+  });
+
+  ws.on('close', () => {
+    clearInterval(pingInterval);
+    console.log('Dashboard client disconnected.');
+  });
+
+  ws.on('error', (err) => {
+    clearInterval(pingInterval);
+    console.log('WebSocket error:', err.message);
+  });
+
+  ws.send(JSON.stringify({ type: 'connected', message: 'GFRP SHM Server' }));
 });
 
-server.listen(PORT, () => {
-  console.log(`SHM server running on port ${PORT}`);
-  console.log(`Email alerts → ${EMAIL_TO}`);
-  console.log(`Google Sheets logging every 5 seconds`);
-// Self ping to keep Render awake
+wss.on('error', (err) => {
+  console.log('WebSocket server error:', err.message);
+});
+
 const RENDER_URL = 'https://gfrp-shm.onrender.com';
 setInterval(() => {
   https.get(RENDER_URL, (res) => {
@@ -214,5 +229,10 @@ setInterval(() => {
   }).on('error', (err) => {
     console.log('[Keepalive] Ping failed:', err.message);
   });
-}, 4 * 60 * 1000); // every 4 minutes
+}, 4 * 60 * 1000);
+
+server.listen(PORT, () => {
+  console.log(`SHM server running on port ${PORT}`);
+  console.log(`Email alerts → ${EMAIL_TO}`);
+  console.log(`Google Sheets logging every 5 seconds`);
 });

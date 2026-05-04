@@ -77,13 +77,12 @@
     border-radius: 20px;
     font-weight: 500;
   }
-  .pill-ok { background: rgba(46,204,142,0.15); color: var(--ok); border: 0.5px solid rgba(46,204,142,0.3); }
-  .pill-warn { background: rgba(245,166,35,0.15); color: var(--warn); border: 0.5px solid rgba(245,166,35,0.3); }
-  .pill-danger { background: rgba(255,74,74,0.15); color: var(--danger); border: 0.5px solid rgba(255,74,74,0.3); }
+  .pill-ok     { background: rgba(46,204,142,0.15); color: var(--ok);     border: 0.5px solid rgba(46,204,142,0.3); }
+  .pill-warn   { background: rgba(245,166,35,0.15);  color: var(--warn);   border: 0.5px solid rgba(245,166,35,0.3); }
+  .pill-danger { background: rgba(255,74,74,0.15);   color: var(--danger); border: 0.5px solid rgba(255,74,74,0.3); }
 
   .live-dot {
-    width: 8px;
-    height: 8px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     background: var(--ok);
     display: inline-block;
@@ -337,12 +336,12 @@
 const BASELINE_M1 = 83.87;
 const WARN_PCT    = 5;
 const DANGER_PCT  = 15;
+const MAX_POINTS  = 60;
 
 let currentBaseline = BASELINE_M1;
 let lastFreq        = null;
 let lastAlertType   = 'ok';
 let freqData = [], axData = [], ayData = [], azData = [], labels = [];
-const MAX_POINTS = 60;
 
 const freqCtx = document.getElementById('freqChart').getContext('2d');
 const freqChart = new Chart(freqCtx, {
@@ -407,109 +406,126 @@ function addLog(type, msg) {
 }
 
 function resetBaseline() {
-  if (lastFreq !== null && lastFreq > 0) {
+  if (lastFreq !== null && lastFreq > 5) {
     currentBaseline = lastFreq;
     addLog('ok', 'Baseline reset to ' + currentBaseline.toFixed(2) + ' Hz');
   }
 }
 
-const ws = new WebSocket(
-  location.protocol === 'https:'
-    ? 'wss://' + location.host
-    : 'ws://' + location.host
-);
+let ws;
+let reconnectTimer;
 
-ws.onopen = function() {
-  addLog('ok', 'Dashboard connected to server');
-  document.getElementById('footerTime').textContent = 'Connected · ' + timeNow();
-};
+function connectWebSocket() {
+  clearTimeout(reconnectTimer);
 
-ws.onclose = function() {
-  addLog('danger', 'Disconnected from server — refresh page');
-};
+  ws = new WebSocket(
+    location.protocol === 'https:'
+      ? 'wss://' + location.host
+      : 'ws://' + location.host
+  );
 
-ws.onmessage = function(event) {
-  const d    = JSON.parse(event.data);
-  const freq = parseFloat(d.freq);
-  const ax   = parseFloat(d.ax);
-  const ay   = parseFloat(d.ay);
-  const az   = parseFloat(d.az);
-  const label = timeNow();
+  ws.onopen = function() {
+    addLog('ok', 'Dashboard connected to server');
+    document.getElementById('footerTime').textContent = 'Connected · ' + timeNow();
+  };
 
-  lastFreq = freq;
+  ws.onclose = function() {
+    addLog('danger', 'Disconnected — reconnecting in 5 seconds...');
+    reconnectTimer = setTimeout(connectWebSocket, 5000);
+  };
 
-  // Calculate deviation only when freq is meaningful
-  let dev = 0;
-  if (freq > 5) {
-    dev = ((freq - currentBaseline) / currentBaseline) * 100;
-  }
-  const peak = Math.sqrt(ax*ax + ay*ay + az*az);
+  ws.onerror = function() {
+    ws.close();
+  };
 
-  document.getElementById('freqVal').textContent  = freq.toFixed(2);
-  document.getElementById('devVal').textContent   = freq > 5 ? (dev >= 0 ? '+' : '') + dev.toFixed(1) : '--';
-  document.getElementById('accelVal').textContent = peak.toFixed(3);
-  document.getElementById('lastSeen').textContent = 'Last: ' + label;
-  document.getElementById('footerTime').textContent = 'Updated · ' + label;
+  ws.onmessage = function(event) {
+    try {
+      const d = JSON.parse(event.data);
+      if (d.type === 'connected') return;
 
-  const warnHigh  = currentBaseline * (1 + WARN_PCT/100);
-  const warnLow   = currentBaseline * (1 - WARN_PCT/100);
-  const dangerLow = currentBaseline * (1 - DANGER_PCT/100);
+      const freq = parseFloat(d.freq);
+      const ax   = parseFloat(d.ax);
+      const ay   = parseFloat(d.ay);
+      const az   = parseFloat(d.az);
+      const label = timeNow();
 
-  // Only trigger alerts when freq is meaningful
-  let alertType = 'ok';
-  if (freq > 5) {
-    if (Math.abs(dev) >= DANGER_PCT) alertType = 'danger';
-    else if (Math.abs(dev) >= WARN_PCT) alertType = 'warning';
-  }
+      lastFreq = freq;
 
-  const pill   = document.getElementById('statusPill');
-  const freqEl = document.getElementById('freqVal');
-  const devEl  = document.getElementById('devVal');
+      let dev = 0;
+      if (freq > 5) dev = ((freq - currentBaseline) / currentBaseline) * 100;
+      const peak = Math.sqrt(ax*ax + ay*ay + az*az);
 
-  if (alertType === 'danger') {
-    pill.className = 'status-pill pill-danger';
-    pill.textContent = 'CRITICAL';
-    freqEl.className = 'metric-value val-danger';
-    devEl.className  = 'metric-value val-danger';
-    if (lastAlertType !== 'danger') addLog('danger', 'CRITICAL — Freq=' + freq.toFixed(2) + ' Hz | Dev=' + dev.toFixed(1) + '% — structural anomaly!');
-  } else if (alertType === 'warning') {
-    pill.className = 'status-pill pill-warn';
-    pill.textContent = 'Warning';
-    freqEl.className = 'metric-value val-warn';
-    devEl.className  = 'metric-value val-warn';
-    if (lastAlertType !== 'warning') addLog('warn', 'Warning — Freq=' + freq.toFixed(2) + ' Hz | Dev=' + dev.toFixed(1) + '%');
-  } else {
-    pill.className = 'status-pill pill-ok';
-    pill.textContent = 'Normal';
-    freqEl.className = 'metric-value val-ok';
-    devEl.className  = 'metric-value val-normal';
-    if (lastAlertType !== 'ok') addLog('ok', 'Frequency returned to normal range');
-  }
-  lastAlertType = alertType;
+      document.getElementById('freqVal').textContent  = freq.toFixed(2);
+      document.getElementById('devVal').textContent   = freq > 5 ? (dev >= 0 ? '+' : '') + dev.toFixed(1) : '--';
+      document.getElementById('accelVal').textContent = peak.toFixed(3);
+      document.getElementById('lastSeen').textContent = 'Last: ' + label;
+      document.getElementById('footerTime').textContent = 'Updated · ' + label;
 
-  freqData.push(freq);
-  axData.push(parseFloat(ax.toFixed(3)));
-  ayData.push(parseFloat(ay.toFixed(3)));
-  azData.push(parseFloat((az - 9.8).toFixed(3)));
-  labels.push(label);
+      const warnHigh  = currentBaseline * (1 + WARN_PCT/100);
+      const warnLow   = currentBaseline * (1 - WARN_PCT/100);
+      const dangerLow = currentBaseline * (1 - DANGER_PCT/100);
 
-  if (freqData.length > MAX_POINTS) {
-    freqData.shift(); axData.shift(); ayData.shift(); azData.shift(); labels.shift();
-  }
+      let alertType = 'ok';
+      if (freq > 5) {
+        if (Math.abs(dev) >= DANGER_PCT) alertType = 'danger';
+        else if (Math.abs(dev) >= WARN_PCT) alertType = 'warning';
+      }
 
-  freqChart.data.labels = labels;
-  freqChart.data.datasets[0].data = freqData;
-  freqChart.data.datasets[1].data = new Array(freqData.length).fill(parseFloat(warnHigh.toFixed(2)));
-  freqChart.data.datasets[2].data = new Array(freqData.length).fill(parseFloat(warnLow.toFixed(2)));
-  freqChart.data.datasets[3].data = new Array(freqData.length).fill(parseFloat(dangerLow.toFixed(2)));
-  freqChart.update('none');
+      const pill   = document.getElementById('statusPill');
+      const freqEl = document.getElementById('freqVal');
+      const devEl  = document.getElementById('devVal');
 
-  accelChart.data.labels = labels;
-  accelChart.data.datasets[0].data = axData;
-  accelChart.data.datasets[1].data = ayData;
-  accelChart.data.datasets[2].data = azData;
-  accelChart.update('none');
-};
+      if (alertType === 'danger') {
+        pill.className = 'status-pill pill-danger';
+        pill.textContent = 'CRITICAL';
+        freqEl.className = 'metric-value val-danger';
+        devEl.className  = 'metric-value val-danger';
+        if (lastAlertType !== 'danger') addLog('danger', 'CRITICAL — Freq=' + freq.toFixed(2) + ' Hz | Dev=' + dev.toFixed(1) + '%');
+      } else if (alertType === 'warning') {
+        pill.className = 'status-pill pill-warn';
+        pill.textContent = 'Warning';
+        freqEl.className = 'metric-value val-warn';
+        devEl.className  = 'metric-value val-warn';
+        if (lastAlertType !== 'warning') addLog('warn', 'Warning — Freq=' + freq.toFixed(2) + ' Hz | Dev=' + dev.toFixed(1) + '%');
+      } else {
+        pill.className = 'status-pill pill-ok';
+        pill.textContent = 'Normal';
+        freqEl.className = 'metric-value val-ok';
+        devEl.className  = 'metric-value val-normal';
+        if (lastAlertType !== 'ok') addLog('ok', 'Frequency returned to normal range');
+      }
+      lastAlertType = alertType;
+
+      freqData.push(freq);
+      axData.push(parseFloat(ax.toFixed(3)));
+      ayData.push(parseFloat(ay.toFixed(3)));
+      azData.push(parseFloat((az - 9.8).toFixed(3)));
+      labels.push(label);
+
+      if (freqData.length > MAX_POINTS) {
+        freqData.shift(); axData.shift(); ayData.shift(); azData.shift(); labels.shift();
+      }
+
+      freqChart.data.labels = labels;
+      freqChart.data.datasets[0].data = freqData;
+      freqChart.data.datasets[1].data = new Array(freqData.length).fill(parseFloat(warnHigh.toFixed(2)));
+      freqChart.data.datasets[2].data = new Array(freqData.length).fill(parseFloat(warnLow.toFixed(2)));
+      freqChart.data.datasets[3].data = new Array(freqData.length).fill(parseFloat(dangerLow.toFixed(2)));
+      freqChart.update('none');
+
+      accelChart.data.labels = labels;
+      accelChart.data.datasets[0].data = axData;
+      accelChart.data.datasets[1].data = ayData;
+      accelChart.data.datasets[2].data = azData;
+      accelChart.update('none');
+
+    } catch(e) {
+      console.log('Message parse error:', e);
+    }
+  };
+}
+
+connectWebSocket();
 </script>
 </body>
 </html>
