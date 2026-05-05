@@ -7,7 +7,7 @@ const nodemailer = require('nodemailer');
 
 const app    = express();
 const server = http.createServer(app);
-const wss    = new WebSocket.Server({ 
+const wss    = new WebSocket.Server({
   server,
   perMessageDeflate: false
 });
@@ -43,15 +43,27 @@ app.get('/mobile', (req, res) => {
 });
 
 app.post('/data', (req, res) => {
-const { freq, ax, ay, az, ts, alert, deviation, baseline } = req.body;
+  const body       = req.body;
+  const freq       = body.freq;
+  const ax         = body.ax;
+  const ay         = body.ay;
+  const az         = body.az;
+  const ts         = body.ts;
+  const alert      = body.alert      || 'NORMAL';
+  const deviation  = body.deviation  || 0;
+  const baseline   = body.baseline   || 83.87;
 
   if (freq === undefined) {
     return res.status(400).json({ error: 'Missing freq field' });
   }
 
-const payload = JSON.stringify({ freq, ax, ay, az, ts, alert, deviation, baseline, serverTs: Date.now() });
+  const payload = JSON.stringify({
+    freq, ax, ay, az, ts,
+    alert, deviation, baseline,
+    serverTs: Date.now()
+  });
 
-  console.log(`[${new Date().toLocaleTimeString()}] freq=${freq} Hz  alert=${alert || 'NORMAL'}  dev=${deviation || 0}%`);
+  console.log(`[${new Date().toLocaleTimeString()}] freq=${freq} Hz  alert=${alert}  dev=${deviation}%`);
 
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -59,9 +71,7 @@ const payload = JSON.stringify({ freq, ax, ay, az, ts, alert, deviation, baselin
     }
   });
 
-  const currentAlert = alert || 'NORMAL';
-  checkAndSendEmail(currentAlert, freq, deviation, ax, ay, az);
-
+  checkAndSendEmail(alert, freq, deviation, ax, ay, az);
   logToGoogleSheets({ freq, ax, ay, az });
 
   res.json({ status: 'ok' });
