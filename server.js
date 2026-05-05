@@ -43,17 +43,13 @@ app.get('/mobile', (req, res) => {
 });
 
 app.post('/data', (req, res) => {
-  const { freq, ax, ay, az, ts, alert, deviation, baseline } = req.body;
+const { freq, ax, ay, az, ts, alert, deviation, baseline } = req.body;
 
   if (freq === undefined) {
     return res.status(400).json({ error: 'Missing freq field' });
   }
 
-  const payload = JSON.stringify({
-    freq, ax, ay, az, ts,
-    alert, deviation, baseline,
-    serverTs: Date.now()
-  });
+const payload = JSON.stringify({ freq, ax, ay, az, ts, alert, deviation, baseline, serverTs: Date.now() });
 
   console.log(`[${new Date().toLocaleTimeString()}] freq=${freq} Hz  alert=${alert || 'NORMAL'}  dev=${deviation || 0}%`);
 
